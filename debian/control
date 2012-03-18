@@ -6,7 +6,7 @@ Uploaders: Aron Xu <aron@debian.org>, YunQiang Su <wzssyqa@gmail.com>
 DM-Upload-Allowed: yes
 Build-Depends: debhelper (>= 8), cmake, fcitx-libs-dev (>= 1:4.2.0), libcurl4-gnutls-dev,
   intltool
-Standards-Version: 3.9.2
+Standards-Version: 3.9.3
 Homepage: http://code.google.com/p/fcitx
 Vcs-Git: git://git.debian.org/pkg-ime/fcitx-cloudpinyin.git
 Vcs-Browser: http://git.debian.org/?p=pkg-ime/fcitx-cloudpinyin.git

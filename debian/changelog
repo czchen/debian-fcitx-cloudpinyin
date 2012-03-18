@@ -1,3 +1,9 @@
+fcitx-cloudpinyin (0.2.1-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Aron Xu <aron@debian.org>  Sun, 18 Mar 2012 23:03:22 +0800
+
 fcitx-cloudpinyin (0.2.0-2) unstable; urgency=low
 
   * debian/control: fix team mailing list. 
