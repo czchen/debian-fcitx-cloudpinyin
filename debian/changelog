@@ -1,3 +1,9 @@
+fcitx-cloudpinyin (0.2.1-2) unstable; urgency=low
+
+  * Fix the full name of Fcitx in debian/control.
+
+ -- YunQiang Su <wzssyqa@gmail.com>  Fri, 18 May 2012 10:19:31 +0800
+
 fcitx-cloudpinyin (0.2.1-1) unstable; urgency=low
 
   * New upstream release.

@@ -15,8 +15,8 @@ Package: fcitx-module-cloudpinyin
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, fcitx-modules (>=1:4.2.0)
 Recommends: fcitx (>=1:4.2.0)
-Description: Free Chinese Input Toy of X - cloudpinyin module
- Fcitx is the Free Chinese Input Toy of X, which was initially designed
+Description: Flexible Input Method Framework - cloudpinyin module
+ Fcitx is the Flexible Input Method Framework, which was initially designed
  for Chinese users, and used XIM protocol. Now it has already evolved
  into a highly modularized, feature rich input method framework for
  Unix-like platforms supporting a considerable amount of frontends,
