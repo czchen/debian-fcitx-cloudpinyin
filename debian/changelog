@@ -1,3 +1,9 @@
+fcitx-cloudpinyin (0.2.2-1) unstable; urgency=low
+
+  * Imported Upstream version 0.2.2
+
+ -- YunQiang Su <wzssyqa@gmail.com>  Mon, 04 Jun 2012 10:21:51 +0800
+
 fcitx-cloudpinyin (0.2.1-2) unstable; urgency=low
 
   * Fix the full name of Fcitx in debian/control.
