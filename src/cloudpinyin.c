@@ -39,6 +39,7 @@
 #include "fetch.h"
 
 #define CHECK_VALID_IM (im && \
+                        strcmp(im->langCode, "zh_CN") == 0 && \
                         (strcmp(im->uniqueName, "pinyin") == 0 || \
                         strcmp(im->uniqueName, "pinyin-libpinyin") == 0 || \
                         strcmp(im->uniqueName, "shuangpin-libpinyin") == 0 || \
@@ -546,19 +547,27 @@ void _CloudPinyinAddCandidateWord(FcitxCloudPinyin* cloudpinyin, const char* pin
 {
     CloudPinyinCache* cacheEntry = CloudPinyinCacheLookup(cloudpinyin, pinyin);
     FcitxInputState* input = FcitxInstanceGetInputState(cloudpinyin->owner);
-    struct _FcitxCandidateWordList* candList = FcitxInputStateGetCandidateList(input);
+    FcitxCandidateWordList* candList = FcitxInputStateGetCandidateList(input);
+
+    int order = cloudpinyin->config.iCandidateOrder - 1;
+    if (order < 0)
+        order = 0;
 
     if (cacheEntry) {
         FcitxCandidateWord* cand;
         /* only check the first three page */
-        int size = FcitxCandidateWordGetPageSize(candList) * CLOUDPINYIN_CHECK_PAGE_NUMBER;
+        int pagesize = FcitxCandidateWordGetPageSize(candList);
+        int size = pagesize * CLOUDPINYIN_CHECK_PAGE_NUMBER;
         int i = 0;
-        for (cand = FcitxCandidateWordGetFirst(FcitxInputStateGetCandidateList(input));
+        for (cand = FcitxCandidateWordGetFirst(candList);
              cand != NULL;
-             cand = FcitxCandidateWordGetNext(FcitxInputStateGetCandidateList(input), cand))
+             cand = FcitxCandidateWordGetNext(candList, cand))
         {
-            if (strcmp(cand->strWord, cacheEntry->str) == 0)
+            if (strcmp(cand->strWord, cacheEntry->str) == 0) {
+                if (i > order && i >= pagesize)
+                    FcitxCandidateWordMoveByWord(candList, cand, order);
                 return;
+            }
             i ++;
             if (i >= size)
                 break;
@@ -589,10 +598,6 @@ void _CloudPinyinAddCandidateWord(FcitxCloudPinyin* cloudpinyin, const char* pin
         candWord.extraType = MSG_TIPS;
     }
 
-    int order = cloudpinyin->config.iCandidateOrder - 1;
-    if (order < 0)
-        order = 0;
-
     FcitxCandidateWordInsert(candList, &candWord, order);
 }
 
@@ -603,6 +608,7 @@ void CloudPinyinFillCandidateWord(FcitxCloudPinyin* cloudpinyin, const char* pin
     struct _FcitxCandidateWordList* candList = FcitxInputStateGetCandidateList(input);
     if (cacheEntry)
     {
+        int cloudidx = 0;
         FcitxCandidateWord* candWord;
         for (candWord = FcitxCandidateWordGetFirst(candList);
              candWord != NULL;
@@ -610,6 +616,7 @@ void CloudPinyinFillCandidateWord(FcitxCloudPinyin* cloudpinyin, const char* pin
         {
             if (candWord->owner == cloudpinyin)
                 break;
+            cloudidx ++;
         }
 
         if (candWord == NULL)
@@ -621,13 +628,29 @@ void CloudPinyinFillCandidateWord(FcitxCloudPinyin* cloudpinyin, const char* pin
 
         FcitxCandidateWord* cand;
         int i = 0;
-        int size = FcitxCandidateWordGetPageSize(candList) * CLOUDPINYIN_CHECK_PAGE_NUMBER;
+        int pagesize = FcitxCandidateWordGetPageSize(candList);
+        int size = pagesize * CLOUDPINYIN_CHECK_PAGE_NUMBER;
         for (cand = FcitxCandidateWordGetFirst(candList);
              cand != NULL;
              cand = FcitxCandidateWordGetNext(candList, cand))
         {
             if (strcmp(cand->strWord, cacheEntry->str) == 0) {
                 FcitxCandidateWordRemove(candList, candWord);
+                /* if cloud word is not on the first page.. impossible */
+                if (cloudidx < pagesize) {
+                    /* if the duplication before cloud word */
+                    if (i < cloudidx) {
+                        FcitxCandidateWordInsertPlaceHolder(candList, cloudidx);
+                    }
+                    else {
+                        if (i >= pagesize) {
+                            FcitxCandidateWordMove(candList, i - 1, cloudidx);
+                        }
+                        else {
+                            FcitxCandidateWordInsertPlaceHolder(candList, cloudidx);
+                        }
+                    }
+                }
                 FcitxUIUpdateInputWindow(cloudpinyin->owner);
                 candWord = NULL;
                 break;
@@ -674,6 +697,11 @@ INPUT_RETURN_VALUE CloudPinyinGetCandWord(void* arg, FcitxCandidateWord* candWor
                     FcitxModuleInvokeFunctionByName(cloudpinyin->owner, "fcitx-sunpinyin", 1, args);
                 else if (strcmp(im->uniqueName, "shuangpin") == 0 || strcmp(im->uniqueName, "pinyin") == 0)
                     FcitxModuleInvokeFunctionByName(cloudpinyin->owner, "fcitx-pinyin", 7, args);
+                else if (strcmp(im->uniqueName, "pinyin-libpinyin") == 0 ||
+                         strcmp(im->uniqueName, "shuangpin-libpinyin") == 0)
+                {
+                    FcitxModuleInvokeFunctionByName(cloudpinyin->owner, "fcitx-libpinyin", 0, args);
+                }
             }
         }
         if (string)
@@ -822,7 +850,7 @@ char* SplitHZAndPY(char* string)
     while (*s)
     {
         char* p;
-        int chr;
+        unsigned int chr;
 
         p = fcitx_utf8_get_char(s, &chr);
         if (p - s == 1)
