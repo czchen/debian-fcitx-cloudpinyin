@@ -1,3 +1,9 @@
+fcitx-cloudpinyin (0.2.3-1) experimental; urgency=low
+
+  * New upstream release.
+
+ -- Aron Xu <aron@debian.org>  Sat, 11 Aug 2012 19:52:06 +0800
+
 fcitx-cloudpinyin (0.2.2-1) unstable; urgency=low
 
   * Imported Upstream version 0.2.2
