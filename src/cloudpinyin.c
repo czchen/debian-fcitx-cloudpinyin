@@ -33,13 +33,23 @@
 #include <fcitx-utils/log.h>
 #include <fcitx/candidate.h>
 #include <fcitx-config/xdg.h>
-#include <fcitx/module/pinyin/pydef.h>
+#include <fcitx/module/pinyin/fcitx-pinyin.h>
 
 #include "cloudpinyin.h"
 #include "fetch.h"
 #include "parse.h"
 
-#define CHECK_VALID_IM (im && \
+DEFINE_GET_ADDON("fcitx-sunpinyin", SunPinyin)
+DEFINE_GET_ADDON("fcitx-libpinyin", LibPinyin)
+DEFINE_GET_ADDON("fcitx-sogoupinyin", SogouPinyin)
+DEFINE_GET_AND_INVOKE_FUNC(SunPinyin, GetFullPinyin, 0)
+DEFINE_GET_AND_INVOKE_FUNC(SunPinyin, AddWord, 1)
+
+// Maybe not the right name, but doesn't matter....
+DEFINE_GET_AND_INVOKE_FUNC(LibPinyin, AddWord, 0)
+DEFINE_GET_AND_INVOKE_FUNC(SogouPinyin, AddWord, 0)
+
+#define CHECK_VALID_IM (im &&                                 \
                         strcmp(im->langCode, "zh_CN") == 0 && \
                         (strcmp(im->uniqueName, "pinyin") == 0 || \
                         strcmp(im->uniqueName, "pinyin-libpinyin") == 0 || \
@@ -50,8 +60,6 @@
                         strcmp(im->uniqueName, "sogou-pinyin") == 0))
 
 #define CLOUDPINYIN_CHECK_PAGE_NUMBER 3
-
-#define LOGLEVEL DEBUG
 
 typedef struct _CloudCandWord {
     boolean filled;
@@ -151,8 +159,7 @@ CloudSetClientPreedit(FcitxCloudPinyin *cloudpinyin, const char *str)
     } else {
         FcitxMessagesAddMessageAtLast(message, MSG_INPUT, "%s", str);
     }
-    if (string)
-        free(string);
+    fcitx_utils_free(string);
     FcitxInstanceUpdateClientSideUI(
         cloudpinyin->owner, FcitxInstanceGetCurrentIC(cloudpinyin->owner));
 }
@@ -279,7 +286,7 @@ void CloudPinyinAddCandidateWord(void* arg)
 
             if (inputString) {
                 CloudPinyinCache* cacheEntry = CloudPinyinCacheLookup(cloudpinyin, inputString);
-                FcitxLog(LOGLEVEL, "%s", inputString);
+                FcitxLog(DEBUG, "%s", inputString);
                 if (cacheEntry == NULL)
                     CloudPinyinAddInputRequest(cloudpinyin, inputString);
                 _CloudPinyinAddCandidateWord(cloudpinyin, inputString);
@@ -347,13 +354,19 @@ void CloudPinyinSetFD(void* arg)
 void CloudPinyinProcessEvent(void* arg)
 {
     FcitxCloudPinyin* cloudpinyin = (FcitxCloudPinyin*) arg;
+    FcitxInstance* instance = cloudpinyin->owner;
+    if (!FD_ISSET(cloudpinyin->pipeRecv, FcitxInstanceGetReadFDSet(instance)))
+        return;
+
     char c;
     while (read(cloudpinyin->pipeRecv, &c, sizeof(char)) > 0);
     pthread_mutex_lock(&cloudpinyin->finishQueueLock);
     CurlQueue* queue;
     queue = cloudpinyin->finishQueue;
+    /* this queue header is empty, so the check condition is "next" not null */
     while (queue->next != NULL)
     {
+        /* remove pivot from queue, thus pivot need to be free'd in HandleRequest */
         CurlQueue* pivot = queue->next;
         queue->next = queue->next->next;
         CloudPinyinHandleRequest(cloudpinyin, pivot);
@@ -363,7 +376,48 @@ void CloudPinyinProcessEvent(void* arg)
 
 void CloudPinyinDestroy(void* arg)
 {
+    FcitxCloudPinyin* cloudpinyin = (FcitxCloudPinyin*) arg;
+    char c = 1;
+    write(cloudpinyin->pipeNotify, &c, sizeof(char));
+    pthread_join(cloudpinyin->pid, NULL);
+    pthread_mutex_destroy(&cloudpinyin->pendingQueueLock);
+    pthread_mutex_destroy(&cloudpinyin->finishQueueLock);
+    while (cloudpinyin->cache)
+    {
+        CloudPinyinCache* head = cloudpinyin->cache;
+        HASH_DEL(cloudpinyin->cache, cloudpinyin->cache);
+        free(head->pinyin);
+        free(head->str);
+        free(head);
+    }
 
+    close(cloudpinyin->pipeRecv);
+    close(cloudpinyin->pipeNotify);
+
+    close(cloudpinyin->fetch->pipeRecv);
+    close(cloudpinyin->fetch->pipeNotify);
+    int i = 0;
+    for (i = 0; i < MAX_HANDLE; i ++) {
+        if (cloudpinyin->freeList[i].curl) {
+            curl_easy_cleanup(cloudpinyin->freeList[i].curl);
+        }
+    }
+
+    curl_multi_cleanup(cloudpinyin->fetch->curlm);
+#define _FREE_QUEUE(NAME) \
+    while(NAME) { \
+        CurlQueue* queue = NAME; \
+        NAME = NAME->next; \
+        fcitx_utils_free(queue->str); \
+        fcitx_utils_free(queue->pinyin); \
+        free(queue); \
+    }
+    _FREE_QUEUE(cloudpinyin->pendingQueue)
+    _FREE_QUEUE(cloudpinyin->finishQueue)
+    _FREE_QUEUE(cloudpinyin->fetch->queue)
+    FcitxConfigFree(&cloudpinyin->config.config);
+    free(cloudpinyin->fetch);
+    free(cloudpinyin);
 }
 
 void CloudPinyinReloadConfig(void* arg)
@@ -445,7 +499,7 @@ void CloudPinyinHandleRequest(FcitxCloudPinyin* cloudpinyin, CurlQueue* queue)
                 strToFree = GetCurrentString(cloudpinyin, &inputString);
 
                 if (inputString) {
-                    FcitxLog(LOGLEVEL, "fill: %s %s", inputString, queue->pinyin);
+                    FcitxLog(DEBUG, "fill: %s %s", inputString, queue->pinyin);
                     if (strcmp(inputString, queue->pinyin) == 0)
                     {
                         if (CHECK_VALID_IM)
@@ -472,10 +526,8 @@ void CloudPinyinHandleRequest(FcitxCloudPinyin* cloudpinyin, CurlQueue* queue)
         }
     }
     CloudPinyinReleaseCurlHandle(cloudpinyin, queue->curl);
-    if (queue->str)
-        free(queue->str);
-    if (queue->pinyin)
-        free(queue->pinyin);
+    fcitx_utils_free(queue->str);
+    fcitx_utils_free(queue->pinyin);
     free(queue);
 }
 
@@ -692,25 +744,25 @@ INPUT_RETURN_VALUE CloudPinyinGetCandWord(void* arg, FcitxCandidateWord* candWor
         if (py) {
             *py = 0;
 
-            snprintf(FcitxInputStateGetOutputString(input), MAX_USER_INPUT, "%s%s", string, candWord->strWord);
+            snprintf(FcitxInputStateGetOutputString(input),
+                     MAX_USER_INPUT, "%s%s", string, candWord->strWord);
 
             FcitxIM* im = FcitxInstanceGetCurrentIM(cloudpinyin->owner);
-            FcitxModuleFunctionArg args;
-            args.args[0] = FcitxInputStateGetOutputString(input);
-            if (im)
-            {
-                if (strcmp(im->uniqueName, "sunpinyin") == 0)
-                    FcitxModuleInvokeFunctionByName(cloudpinyin->owner, "fcitx-sunpinyin", 1, args);
-                else if (strcmp(im->uniqueName, "shuangpin") == 0 || strcmp(im->uniqueName, "pinyin") == 0)
-                    FcitxModuleInvokeFunctionByName(cloudpinyin->owner, "fcitx-pinyin", 7, args);
-                else if (strcmp(im->uniqueName, "pinyin-libpinyin") == 0 ||
-                         strcmp(im->uniqueName, "shuangpin-libpinyin") == 0)
-                {
-                    FcitxModuleInvokeFunctionByName(cloudpinyin->owner, "fcitx-libpinyin", 0, args);
+            if (im) {
+                char *output_string = FcitxInputStateGetOutputString(input);
+                FCITX_DEF_MODULE_ARGS(args, output_string);
+                if (strcmp(im->uniqueName, "sunpinyin") == 0) {
+                    FcitxSunPinyinInvokeAddWord(cloudpinyin->owner, args);
+                } else if (strcmp(im->uniqueName, "shuangpin") == 0 ||
+                           strcmp(im->uniqueName, "pinyin") == 0) {
+                    FcitxPinyinInvokeAddUserPhrase(cloudpinyin->owner, args);
+                } else if (strcmp(im->uniqueName, "pinyin-libpinyin") == 0 ||
+                           strcmp(im->uniqueName, "shuangpin-libpinyin") == 0) {
+                    FcitxLibPinyinInvokeAddWord(cloudpinyin->owner, args);
                 }
                 else if (strcmp(im->uniqueName, "sogou-pinyin") == 0)
                 {
-                    FcitxModuleInvokeFunctionByName(cloudpinyin->owner, "fcitx-sogoupinyin", 0, args);
+                    FcitxSogouPinyinInvokeAddWord(cloudpinyin->owner, args);
                 }
             }
         }
@@ -789,17 +841,14 @@ char *GetCurrentString(FcitxCloudPinyin* cloudpinyin, char **ascii_part)
 
             if (*lastpos != '\0') {
                 char* result = NULL;
-                FcitxModuleFunctionArg arg;
-                arg.args[0] = lastpos;
                 boolean isshuangpin = false;
                 if (strcmp(im->uniqueName, "sunpinyin") == 0) {
-                    boolean issp = false;
-                    arg.args[1] = &issp;
-                    result = FcitxModuleInvokeFunctionByName(cloudpinyin->owner, "fcitx-sunpinyin", 0, arg);
-                    isshuangpin = issp;
+                    FCITX_DEF_MODULE_ARGS(args, lastpos, &isshuangpin);
+                    result = FcitxSunPinyinInvokeGetFullPinyin(
+                        cloudpinyin->owner, args);
                 } else if (strcmp(im->uniqueName, "shuangpin") == 0) {
                     isshuangpin = true;
-                    result = InvokeFunction(cloudpinyin->owner, FCITX_PINYIN, SP2QP, arg);
+                    result = FcitxPinyinSP2QP(cloudpinyin->owner, lastpos);
                 }
                 if (isshuangpin) {
                     if (result) {
@@ -822,11 +871,9 @@ char *GetCurrentString(FcitxCloudPinyin* cloudpinyin, char **ascii_part)
                     }
                 }
             }
-
             lastpos = pinyin + 1;
         }
         pinyin ++;
-
     } while(endflag);
     free(string);
     /* no pinyin append, return NULL for off it */
@@ -846,10 +893,8 @@ void SogouParseKey(FcitxCloudPinyin* cloudpinyin, CurlQueue* queue)
     const char* ime_patch_key = "ime_patch_key = \"";
     size_t len = strlen(str);
     if (len == SOGOU_KEY_LENGTH + strlen(ime_patch_key) + 1
-            && strncmp(str, ime_patch_key, strlen(ime_patch_key)) == 0
-            && str[len - 1] == '\"'
-        )
-    {
+        && strncmp(str, ime_patch_key, strlen(ime_patch_key)) == 0
+        && str[len - 1] == '\"') {
         sscanf(str,"ime_patch_key = \"%s\"", cloudpinyin->key);
         cloudpinyin->initialized = true;
         cloudpinyin->key[SOGOU_KEY_LENGTH] = '\0';
@@ -861,8 +906,7 @@ void SogouParseKey(FcitxCloudPinyin* cloudpinyin, CurlQueue* queue)
 void CloudPinyinHookForNewRequest(void* arg)
 {
     FcitxCloudPinyin* cloudpinyin = (FcitxCloudPinyin*) arg;
-    if (!cloudpinyin->initialized && !cloudpinyin->isrequestkey)
-    {
+    if (!cloudpinyin->initialized && !cloudpinyin->isrequestkey) {
         CloudPinyinRequestKey(cloudpinyin);
     }
 }
