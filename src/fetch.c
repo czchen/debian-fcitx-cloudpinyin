@@ -45,12 +45,15 @@ void* FetchThread(void* arg)
     while (true) {
         boolean endflag = false;
         char c;
-        while (read(fetch->pipeRecv, &c, sizeof(char)) > 0) {
-            if (c == 1)
+        int r = 0;
+        while ((r = read(fetch->pipeRecv, &c, sizeof(char))) > 0) {
+            if (c == 1) {
                 endflag = true;
+            }
         }
-        if (endflag)
+        if (r == 0 || endflag) {
             break;
+        }
 
         FetchProcessPendingRequest(fetch);
         FetchProcessEvent(fetch);
@@ -125,15 +128,14 @@ void FetchProcessEvent(FcitxFetchThread* fetch)
 
 void FetchProcessPendingRequest(FcitxFetchThread* fetch)
 {
-    boolean still_running;
-
     /* pull all item from pending queue and move to fetch queue */
     pthread_mutex_lock(fetch->pendingQueueLock);
     FcitxCloudPinyin *cloudpinyin = fetch->owner;
-    CurlQueue* head = cloudpinyin->pendingQueue;
-    CurlQueue* tail = fetch->queue;
-    while(tail->next)
+    volatile CurlQueue* head = cloudpinyin->pendingQueue;
+    volatile CurlQueue* tail = fetch->queue;
+    while(tail->next) {
         tail = tail->next;
+    }
     while(head->next) {
         CurlQueue* item = head->next;
         item->next = tail->next;
@@ -143,18 +145,9 @@ void FetchProcessPendingRequest(FcitxFetchThread* fetch)
     pthread_mutex_unlock(fetch->pendingQueueLock);
     /* new item start from here */
     tail = tail->next;
-    boolean flag = false;
     while(tail) {
         curl_multi_add_handle(fetch->curlm, tail->curl);
         tail = tail->next;
-        flag = true;
-    }
-
-    if (flag) {
-        CURLMcode mcode;
-        do {
-            mcode = curl_multi_perform(fetch->curlm, &still_running);
-        } while (mcode == CURLM_CALL_MULTI_PERFORM);
     }
 }
 
@@ -164,9 +157,10 @@ void FetchFinish(FcitxFetchThread* fetch, CurlQueue* queue)
 
     FcitxCloudPinyin *cloudpinyin = fetch->owner;
 
-    CurlQueue* head = cloudpinyin->finishQueue;
-    while(head->next)
+    volatile CurlQueue* head = cloudpinyin->finishQueue;
+    while(head->next) {
         head = head->next;
+    }
     head->next = queue;
     queue->next = NULL;
     pthread_mutex_unlock(fetch->finishQueueLock);
