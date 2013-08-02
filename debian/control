@@ -3,18 +3,17 @@ Section: utils
 Priority: optional
 Maintainer: IME Packaging Team <pkg-ime-devel@lists.alioth.debian.org>
 Uploaders: Aron Xu <aron@debian.org>, YunQiang Su <wzssyqa@gmail.com>
-DM-Upload-Allowed: yes
-Build-Depends: debhelper (>= 9), cmake, fcitx-libs-dev (>= 1:4.2.6), libcurl4-gnutls-dev,
+Build-Depends: debhelper (>= 9), cmake, fcitx-libs-dev (>= 1:4.2.8), libcurl4-gnutls-dev,
   fcitx-bin
-Standards-Version: 3.9.3
+Standards-Version: 3.9.4
 Homepage: http://code.google.com/p/fcitx
-Vcs-Git: git://git.debian.org/pkg-ime/fcitx-cloudpinyin.git
-Vcs-Browser: http://git.debian.org/?p=pkg-ime/fcitx-cloudpinyin.git
+Vcs-Git: git://anonscm.debian.org/pkg-ime/fcitx-cloudpinyin.git
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-ime/fcitx-cloudpinyin.git
 
 Package: fcitx-module-cloudpinyin
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, fcitx-modules (>=1:4.2.5)
-Recommends: fcitx (>=1:4.2.5)
+Depends: ${shlibs:Depends}, ${misc:Depends}, fcitx-modules (>=1:4.2.8)
+Recommends: fcitx (>=1:4.2.8)
 Description: Flexible Input Method Framework - cloudpinyin module
  Fcitx is the Flexible Input Method Framework, which was initially designed
  for Chinese users, and used XIM protocol. Now it has already evolved
