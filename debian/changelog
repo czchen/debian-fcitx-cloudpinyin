@@ -1,3 +1,10 @@
+fcitx-cloudpinyin (0.3.3-1) unstable; urgency=low
+
+  * New upstream release.
+  * Default service is changed to Google.
+
+ -- Aron Xu <aron@debian.org>  Sat, 16 Nov 2013 11:40:11 +0800
+
 fcitx-cloudpinyin (0.3.2-1) unstable; urgency=low
 
   * New upstream release
