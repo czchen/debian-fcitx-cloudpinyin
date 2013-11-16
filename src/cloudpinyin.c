@@ -99,8 +99,9 @@ static void CloudPinyinReleaseCurlHandle(FcitxCloudPinyin* cloudpinyin,
                                          CURL* curl);
 static INPUT_RETURN_VALUE CloudPinyinToggle(void* arg);
 
-CloudPinyinEngine engine[4] =
+CloudPinyinEngine engine[] =
 {
+#if 0
     {
         "http://web.pinyin.sogou.com/web_ime/patch.php",
         "http://web.pinyin.sogou.com/api/py?key=%s&query=%s",
@@ -113,6 +114,7 @@ CloudPinyinEngine engine[4] =
         QQParseKey,
         QQParsePinyin
     },
+#endif
     {
         NULL,
         "https://www.google.com/inputtools/request?ime=pinyin&text=%s",
@@ -170,6 +172,7 @@ void* CloudPinyinCreate(FcitxInstance* instance)
 {
     FcitxCloudPinyin *cloudpinyin = fcitx_utils_new(FcitxCloudPinyin);
     bindtextdomain("fcitx-cloudpinyin", LOCALEDIR);
+    bind_textdomain_codeset("fcitx-cloudpinyin", "UTF-8");
     cloudpinyin->owner = instance;
     int pipe1[2];
     int pipe2[2];
@@ -608,7 +611,7 @@ INPUT_RETURN_VALUE CloudPinyinToggle(void* arg)
         cloudpinyin->config.bEnabled = !cloudpinyin->config.bEnabled;
 
         FcitxFreeDesktopNotifyShowAddonTip(
-            instance, "fcitx-punc-toggle",
+            instance, "fcitx-cloudpinyin-toggle",
             "fcitx",
             _("Cloud Pinyin"),
             cloudpinyin->config.bEnabled ? _("Cloud Pinyin is Enabled.") :
