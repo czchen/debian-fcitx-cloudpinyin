@@ -1,3 +1,14 @@
+fcitx-cloudpinyin (0.3.3-2) unstable; urgency=medium
+
+  * Team upload.
+  * Add pkg-config as build dependency.
+    Thanks to Michael Tautschnig (Closes: #749376)
+  * Update debian/copyright
+  * Bump Standard-Version to 3.9.5
+  * Change compat level to 9
+
+ -- ChangZhuo Chen (陳昌倬) <czchen@gmail.com>  Tue, 27 May 2014 20:46:13 +0800
+
 fcitx-cloudpinyin (0.3.3-1) unstable; urgency=low
 
   * New upstream release.
